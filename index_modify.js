@@ -88,11 +88,12 @@ function getKvPutOptions(requestCustomTtl) {
 			throw new Error("Invalid TTL: ttl must be a pure integer number.");
 		}
 
-		// 边界校验：必须在合法的一分钟到一年之间
-		if (requestCustomTtl < MIN_TTL || requestCustomTtl > MAX_TTL) {
-			throw new Error(`Invalid TTL: ttl must be between ${MIN_TTL} and ${MAX_TTL} seconds.`);
+		// 边界校验：必须在 [60, 31536000] 闭区间内
+		const isValidRange = requestCustomTtl >= MIN_TTL && requestCustomTtl <= MAX_TTL;
+		if (!isValidRange) {
+			throw new Error(`Invalid TTL: ttl must be between ${MIN_TTL} and ${MAX_TTL} seconds (inclusive).`);
 		}
-
+		
 		// 校验完全通过，直接返回用户传入的 TTL
 		return {
 			expirationTtl: requestCustomTtl
