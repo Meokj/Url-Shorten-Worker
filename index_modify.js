@@ -78,27 +78,38 @@ async function checkURL(URL) {
 
 function getKvPutOptions(requestCustomTtl) {
 	const MIN_TTL = 60;
-	const DEFAULT_TTL = 86400; // 默认 1 天失效（86400 秒）
+	const MAX_TTL = 31536000;   // 最大 1 年失效（365天 = 31536000 秒）
+	const DEFAULT_TTL = 86400;  // 默认 1 天失效（86400 秒）
 
-	// 优先读取请求中动态传入的 ttl 参数
+	// 1. 如果有传参数，进行极其严格的“纯正整数”和“安全范围”校验
 	if (requestCustomTtl !== undefined && requestCustomTtl !== null) {
-		const customTtl = Number(requestCustomTtl);
-		if (Number.isFinite(customTtl) && customTtl >= MIN_TTL) {
-			return {
-				expirationTtl: Math.floor(customTtl)
-			};
+		// 核心校验：必须是数字类型，且必须是整数（排除了字符串 "100" 和小数 60.5）
+		if (typeof requestCustomTtl !== 'number' || !Number.isInteger(requestCustomTtl)) {
+			throw new Error("Invalid TTL: ttl must be a pure integer number.");
 		}
+
+		// 边界校验：必须在合法的一分钟到一年之间
+		if (requestCustomTtl < MIN_TTL || requestCustomTtl > MAX_TTL) {
+			throw new Error(`Invalid TTL: ttl must be between ${MIN_TTL} and ${MAX_TTL} seconds.`);
+		}
+
+		// 校验完全通过，直接返回用户传入的 TTL
+		return {
+			expirationTtl: requestCustomTtl
+		};
 	}
 
-	// 如果请求没传，再读取 config 配置文件的全局定义
+	// 2. 如果直接没有传 ttl 参数，或者 ttl 参数为 null，进入兜底流程
+	
+	// 优先读取 config 配置文件的全局定义
 	const configTtl = Number(config.expiration_ttl);
-	if (Number.isFinite(configTtl) && configTtl >= MIN_TTL) {
+	if (Number.isFinite(configTtl) && configTtl >= MIN_TTL && configTtl <= MAX_TTL) {
 		return {
 			expirationTtl: Math.floor(configTtl)
 		};
 	}
 
-	// 如果连全局定义也没设置（即维持默认的0），则执行强保底机制：1天后失效
+	// 如果连全局定义也没设置或不合法，则执行强保底机制：1天后失效
 	return {
 		expirationTtl: DEFAULT_TTL
 	};
