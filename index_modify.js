@@ -81,11 +81,18 @@ function getKvPutOptions(requestCustomTtl) {
 	const MAX_TTL = 31536000;   // 最大 1 年失效（365天 = 31536000 秒）
 	const DEFAULT_TTL = 86400;  // 默认 1 天失效（86400 秒）
 
-	// 1. 如果有传参数，进行极其严格的“纯正整数”和“安全范围”校验
-	if (requestCustomTtl !== undefined && requestCustomTtl !== null) {
-		// 核心校验：必须是数字类型，且必须是整数（排除了字符串 "100" 和小数 60.5）
-		if (typeof requestCustomTtl !== 'number' || !Number.isInteger(requestCustomTtl)) {
-			throw new Error("Invalid TTL: ttl must be a pure integer number.");
+	// 1. 如果有传参数，参数校验
+	if (requestCustomTtl !== undefined && requestCustomTtl !== null && requestCustomTtl !== '') {
+
+		// 如果是字符串，先尝试转换成数字
+		let parsedTtl = requestCustomTtl;
+		if (typeof requestCustomTtl === 'string') {
+			parsedTtl = Number(requestCustomTtl);
+		}
+
+		// 核心校验：必须是数字（排除 NaN），且必须是整数（排除了浮点数、非数字字符串如 "abc"）
+		if (typeof parsedTtl !== 'number' || isNaN(parsedTtl) || !Number.isInteger(parsedTtl)) {
+			throw new Error("Invalid TTL: ttl must be a pure integer number or numeric string.");
 		}
 
 		// 边界校验：必须在 [60, 31536000] 闭区间内
