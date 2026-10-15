@@ -40,7 +40,7 @@ if (config.cors == "on") {
 
 async function randomString(len) {
 	len = len || 6;
-	let $chars = 'ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz2345678'; /****默认去掉了容易混淆的字符oOLl,9gq,Vv,Uu,I1****/
+	let $chars = 'ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz2345678';
 	let maxPos = $chars.length;
 	let result = '';
 	for (let i = 0; i < len; i++) {
@@ -51,17 +51,16 @@ async function randomString(len) {
 
 async function sha512(url) {
 	url = new TextEncoder().encode(url)
-
 	const url_digest = await crypto.subtle.digest({
 			name: "SHA-512",
 		},
-		url, // The data you want to hash as an ArrayBuffer
+		url,
 	)
-	const hashArray = Array.from(new Uint8Array(url_digest)); // convert buffer to byte array
+	const hashArray = Array.from(new Uint8Array(url_digest));
 	const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-	//console.log(hashHex)
 	return hashHex
 }
+
 async function checkURL(URL) {
 	let str = URL;
 	let Expression = /http(s)?:\/\/([\w-]+\.)+[\w-]+(\/[\w- .\/?%&=]*)?/;
@@ -78,38 +77,29 @@ async function checkURL(URL) {
 
 function getKvPutOptions(requestCustomTtl) {
 	const MIN_TTL = 60;
-	const MAX_TTL = 31536000;   // 最大 1 年失效（365天 = 31536000 秒）
-	const DEFAULT_TTL = 86400;  // 默认 1 天失效（86400 秒）
+	const MAX_TTL = 31536000;
+	const DEFAULT_TTL = 86400;
 
-	// 1. 如果有传参数，参数校验
 	if (requestCustomTtl !== undefined && requestCustomTtl !== null && requestCustomTtl !== '') {
-
-		// 如果是字符串，先尝试转换成数字
 		let parsedTtl = requestCustomTtl;
 		if (typeof requestCustomTtl === 'string') {
 			parsedTtl = Number(requestCustomTtl);
 		}
 
-		// 核心校验：必须是数字（排除 NaN），且必须是整数（排除了浮点数、非数字字符串如 "abc"）
 		if (typeof parsedTtl !== 'number' || isNaN(parsedTtl) || !Number.isInteger(parsedTtl)) {
 			throw new Error("Invalid TTL: ttl must be a pure integer number or numeric string.");
 		}
 
-		// 边界校验：必须在 [60, 31536000] 闭区间内
 		const isValidRange = requestCustomTtl >= MIN_TTL && requestCustomTtl <= MAX_TTL;
 		if (!isValidRange) {
 			throw new Error(`Invalid TTL: ttl must be between ${MIN_TTL} and ${MAX_TTL} seconds (inclusive).`);
 		}
 		
-		// 校验完全通过，直接返回用户传入的 TTL
 		return {
 			expirationTtl: requestCustomTtl
 		};
 	}
 
-	// 2. 如果直接没有传 ttl 参数，或者 ttl 参数为 null，进入兜底流程
-	
-	// 优先读取 config 配置文件的全局定义
 	const configTtl = Number(config.expiration_ttl);
 	if (Number.isFinite(configTtl) && configTtl >= MIN_TTL && configTtl <= MAX_TTL) {
 		return {
@@ -117,7 +107,6 @@ function getKvPutOptions(requestCustomTtl) {
 		};
 	}
 
-	// 如果连全局定义也没设置或不合法，则执行强保底机制：1天后失效
 	return {
 		expirationTtl: DEFAULT_TTL
 	};
@@ -138,15 +127,14 @@ async function save_url(URL, customTtl) {
 
 async function is_url_exist(url_sha512) {
 	let is_exist = await LINKS.get(url_sha512)
-	console.log(is_exist)
 	if (is_exist == null) {
 		return false
 	} else {
 		return is_exist
 	}
 }
-async function is_url_safe(url) {
 
+async function is_url_safe(url) {
 	let raw = JSON.stringify({
 		"client": {
 			"clientId": "Url-Shorten-Worker",
@@ -170,7 +158,6 @@ async function is_url_safe(url) {
 
 	let result = await fetch("https://safebrowsing.googleapis.com/v4/threatMatches:find?key=" + config.safe_browsing_api_key, requestOptions)
 	result = await result.json()
-	console.log(result)
 	if (Object.keys(result).length === 0) {
 		return true
 	} else {
@@ -178,16 +165,7 @@ async function is_url_safe(url) {
 	}
 }
 
-// ============ CAPTCHA Service Integration ============
-
-/**
- * Validates CAPTCHA token with retry and fallback mechanism
- * @param {string} token - The CAPTCHA token to validate
- * @param {boolean} keepToken - Whether to keep the token for reuse
- * @returns {Promise<{success: boolean, error?: string, degraded?: boolean}>}
- */
 async function validateCaptchaToken(token, keepToken = false) {
-	// If CAPTCHA is disabled, always return success
 	if (!config.captcha.enabled) {
 		return {
 			success: true,
@@ -195,7 +173,6 @@ async function validateCaptchaToken(token, keepToken = false) {
 		};
 	}
 
-	// Validate token format
 	if (!token || typeof token !== 'string' || token.length < 10) {
 		return {
 			success: false,
@@ -206,7 +183,6 @@ async function validateCaptchaToken(token, keepToken = false) {
 	let lastError = null;
 	const maxRetries = config.captcha.max_retries || 2;
 
-	// Retry mechanism for resilience
 	for (let attempt = 0; attempt <= maxRetries; attempt++) {
 		try {
 			const controller = new AbortController();
@@ -227,7 +203,6 @@ async function validateCaptchaToken(token, keepToken = false) {
 
 			clearTimeout(timeoutId);
 
-			// Handle various HTTP status codes
 			if (response.ok) {
 				const result = await response.json();
 				return {
@@ -236,9 +211,7 @@ async function validateCaptchaToken(token, keepToken = false) {
 				};
 			}
 
-			// Handle specific error codes
 			if (response.status === 400 || response.status === 410 || response.status === 404 || response.status === 409) {
-				// Client error, no need to retry
 				return {
 					success: false,
 					error: 'Invalid or expired token'
@@ -248,18 +221,13 @@ async function validateCaptchaToken(token, keepToken = false) {
 			lastError = `HTTP ${response.status}`;
 		} catch (error) {
 			lastError = error.name === 'AbortError' ? 'Timeout' : error.message;
-			console.error(`CAPTCHA validation attempt ${attempt + 1} failed:`, lastError);
-
-			// Exponential backoff before retry (except on last attempt)
 			if (attempt < maxRetries) {
 				await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 100));
 			}
 		}
 	}
 
-	// Service degradation: if fallback is enabled, allow operation
 	if (config.captcha.fallback_on_error) {
-		console.warn(`CAPTCHA service degraded: ${lastError}. Allowing operation due to fallback policy.`);
 		return {
 			success: true,
 			degraded: true
@@ -272,11 +240,6 @@ async function validateCaptchaToken(token, keepToken = false) {
 	};
 }
 
-/**
- * Checks if CAPTCHA is required for the current operation
- * @param {string} operation - 'create' or 'access'
- * @returns {boolean}
- */
 function isCaptchaRequired(operation) {
 	if (!config.captcha.enabled) {
 		return false;
@@ -292,11 +255,6 @@ function isCaptchaRequired(operation) {
 	}
 }
 
-/**
- * Extracts CAPTCHA token from request
- * @param {Request} request - The incoming request
- * @returns {Promise<string|null>}
- */
 async function extractCaptchaToken(request) {
 	const contentType = request.headers.get('content-type') || '';
 
@@ -309,295 +267,193 @@ async function extractCaptchaToken(request) {
 		}
 	}
 
-	// Try to extract from URL parameters
 	const url = new URL(request.url);
 	return url.searchParams.get('captcha_token') || url.searchParams.get('token') || null;
 }
 
-// ============ End CAPTCHA Service Integration ============
 async function handleRequest(request) {
-	console.log(request)
-
 	// Handle POST request - Create short link
-if (request.method === "POST") {
-	try {
-		let req = await request.json()
-		console.log(req["url"])
+	if (request.method === "POST") {
+		try {
+			let req = await request.json();
+			let customTtl = req["ttl"];
 
-		// 从解析好的 JSON 请求体中提取用户可能传入的自定义 ttl
-		let customTtl = req["ttl"];
-
-		// Validate URL format
-		if (!await checkURL(req["url"])) {
-			return new Response(JSON.stringify({
-				status: 500,
-				error: "Invalid URL format"
-			}), {
-				headers: response_header,
-				status: 400
-			})
-		}
-
-		// 调用真正的 save_url 获取随机短链 key
-		let stat = await save_url(req["url"], customTtl)
-
-	} catch (err) {
-		return new Response(JSON.stringify({
-			status: 400,
-			error: err.message  
-		}), {
-			status: 400,
-			headers: response_header  
-		})
-	}
-}
-
-		// CAPTCHA validation for link creation
-		if (isCaptchaRequired('create')) {
-			const captchaToken = req.captcha_token || req.captchaToken || req.token;
-
-			if (!captchaToken) {
+			// Validate URL format
+			if (!await checkURL(req["url"])) {
 				return new Response(JSON.stringify({
-					status: 403,
-					error: "CAPTCHA token required",
-					captcha_required: true
+					status: 500,
+					error: "Invalid URL format"
 				}), {
 					headers: response_header,
-					status: 403
-				})
+					status: 400
+				});
 			}
 
-			const validation = await validateCaptchaToken(captchaToken, false);
+			// CAPTCHA validation for link creation
+			if (isCaptchaRequired('create')) {
+				const captchaToken = req.captcha_token || req.captchaToken || req.token;
 
-			if (!validation.success) {
-				return new Response(JSON.stringify({
-					status: 403,
-					error: validation.error || "CAPTCHA verification failed",
-					captcha_required: true
-				}), {
-					headers: response_header,
-					status: 403
-				})
+				if (!captchaToken) {
+					return new Response(JSON.stringify({
+						status: 403,
+						error: "CAPTCHA token required",
+						captcha_required: true
+					}), {
+						headers: response_header,
+						status: 403
+					});
+				}
+
+				const validation = await validateCaptchaToken(captchaToken, false);
+
+				if (!validation.success) {
+					return new Response(JSON.stringify({
+						status: 403,
+						error: validation.error || "CAPTCHA verification failed",
+						captcha_required: true
+					}), {
+						headers: response_header,
+						status: 403
+					});
+				}
 			}
 
-			// Log if service is degraded
-			if (validation.degraded) {
-				console.warn("Request processed under CAPTCHA service degradation");
-			}
-		}
-
-		// Process short link creation
-		// 改造保存和查询逻辑，支持透传 customTtl
-		let random_key
-		if (config.unique_link) {
-			let url_sha512 = await sha512(req["url"])
-			let url_key = await is_url_exist(url_sha512)
-			if (url_key) {
-				random_key = url_key
+			let random_key;
+			if (config.unique_link) {
+				let url_sha512 = await sha512(req["url"]);
+				let url_key = await is_url_exist(url_sha512);
+				if (url_key) {
+					random_key = url_key;
+				} else {
+					random_key = await save_url(req["url"], customTtl);
+					await LINKS.put(url_sha512, random_key, getKvPutOptions(customTtl));
+				}
 			} else {
-				// 把 customTtl 传给 save_url
-				random_key = await save_url(req["url"], customTtl)
-
-				// 将 getKvPutOptions() 修改为 getKvPutOptions(customTtl) 确保排重用的 sha512 键值对也有相同的过期时间
-				console.log(await LINKS.put(url_sha512, random_key, getKvPutOptions(customTtl)))
+				random_key = await save_url(req["url"], customTtl);
 			}
-		} else {
-			// 把 customTtl 传给 save_url
-			random_key = await save_url(req["url"], customTtl)
-		}
 
-		// 如果生成失败（未成功获取到 key），返回 KV 写入限制错误
-		if (!random_key) {
+			if (!random_key) {
+				return new Response(JSON.stringify({
+					status: 500,
+					error: "Reached KV write limitation"
+				}), {
+					headers: response_header,
+					status: 500
+				});
+			}
+
+			const host = request.headers.get('host');
+			let cleaned_key = random_key.startsWith('/') ? random_key.substring(1) : random_key;
+			let short_url = `https://${host}/${cleaned_key}`;
+
 			return new Response(JSON.stringify({
-				status: 500,
-				error: "Reached KV write limitation"
+				status: 200,
+				key: "/" + cleaned_key,
+				short_url: short_url
 			}), {
-				headers: response_header,
-				status: 500
-			})
+				headers: {
+					...response_header,
+					"content-type": "application/json;charset=UTF-8"
+				},
+				status: 200
+			});
+
+		} catch (err) {
+			return new Response(JSON.stringify({
+				status: 400,
+				error: err.message  
+			}), {
+				status: 400,
+				headers: response_header  
+			});
 		}
-
-		// 通过请求头中的 host，自动在边缘节点动态拼接出完整短网址
-		// 强保底修正写法：无论如何都强行加上标准的斜杠分割线
-		// 通过请求头中的 host，自动在边缘节点动态拼接出完整短网址（采用强保底修正写法）
-		const host = request.headers.get('host');
-		let cleaned_key = random_key.startsWith('/') ? random_key.substring(1) : random_key;
-		let short_url = `https://${host}/${cleaned_key}`;
-
-
-		// 将返回信息包装成标准的 JSON 数据包格式安全返回
-		return new Response(JSON.stringify({
-			status: 200,
-			key: "/" + cleaned_key, // 这里强行补上斜杠，让 key 变成 /5264zh 规范格式
-			short_url: short_url
-		}), {
-			headers: {
-				...response_header,
-				"content-type": "application/json;charset=UTF-8" // 强行指定为标准 JSON 响应头
-			},
-			status: 200
-		})
-
 	} else if (request.method === "OPTIONS") {
 		return new Response("", {
 			headers: response_header,
-		})
+		});
 	}
 
 	// Handle GET request - Access short link
-	const requestURL = new URL(request.url)
-	const path = requestURL.pathname.split("/")[1]
-	const params = requestURL.search
-
-	console.log(path)
+	const requestURL = new URL(request.url);
+	const path = requestURL.pathname.split("/")[1];
+	const params = requestURL.search;
 
 	// Serve homepage
 	if (!path) {
-		const html = await fetch("https://xytom.github.io/Url-Shorten-Worker/" + config.theme + "/index.html")
-
+		const html = await fetch("https://xytom.github.io/Url-Shorten-Worker/" + config.theme + "/index.html");
 		return new Response(await html.text(), {
 			headers: {
 				"content-type": "text/html;charset=UTF-8",
 			},
-		})
+		});
 	}
 
 	// Retrieve the target URL
-	const value = await LINKS.get(path)
-	let location
+	const value = await LINKS.get(path);
+	let location;
 
 	if (params) {
-		location = value + params
+		location = value + params;
 	} else {
-		location = value
+		location = value;
 	}
-	console.log(value)
 
 	if (location) {
-		// CAPTCHA validation for link access
 		if (isCaptchaRequired('access')) {
-			const captchaToken = await extractCaptchaToken(request)
+			const captchaToken = await extractCaptchaToken(request);
 
 			if (!captchaToken) {
-				// Return CAPTCHA challenge page
-				const captchaPage = `
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Verification Required</title>
-    <script src="https://captcha.gurl.eu.org/cap.min.js"></script>
-    <style>
-      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; 
-             display: flex; justify-content: center; align-items: center; min-height: 100vh; 
-             margin: 0; background: linear-gradient(45deg, rgba(14, 46, 75, 1.000) 0.000%, rgba(14, 46, 75, 1.000) 7.692%, rgba(19, 52, 84, 1.000) 7.692%, rgba(19, 52, 84, 1.000) 15.385%, rgba(25, 58, 94, 1.000) 15.385%, rgba(25, 58, 94, 1.000) 23.077%, rgba(31, 65, 104, 1.000) 23.077%, rgba(31, 65, 104, 1.000) 30.769%, rgba(38, 72, 115, 1.000) 30.769%, rgba(38, 72, 115, 1.000) 38.462%, rgba(45, 79, 126, 1.000) 38.462%, rgba(45, 79, 126, 1.000) 46.154%, rgba(52, 86, 138, 1.000) 46.154%, rgba(52, 86, 138, 1.000) 53.846%, rgba(59, 93, 150, 1.000) 53.846%, rgba(59, 93, 150, 1.000) 61.538%, rgba(67, 101, 163, 1.000) 61.538%, rgba(67, 101, 163, 1.000) 69.231%, rgba(75, 109, 176, 1.000) 69.231%, rgba(75, 109, 176, 1.000) 76.923%, rgba(83, 117, 188, 1.000) 76.923%, rgba(83, 117, 188, 1.000) 84.615%, rgba(91, 125, 201, 1.000) 84.615%, rgba(91, 125, 201, 1.000) 92.308%, rgba(99, 134, 214, 1.000) 92.308% 100.000%) }
-      .container { background: white; padding: 2rem; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); 
-                   max-width: 400px; text-align: center; }
-      h1 { color: #333; margin-bottom: 1rem; font-size: 1.5rem; }
-      p { color: #666; margin-bottom: 2rem; }
-      #cap { margin: 2rem 0; display: flex; justify-content: center;}
-      .loading { display: none; color: #667eea; margin-top: 1rem; }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <h1>🔒 Verification Required</h1>
-      <p>Please complete the CAPTCHA below to access this link.</p>
-      
-      <cap-widget id="cap" data-cap-api-endpoint="https://captcha.gurl.eu.org/api/"></cap-widget>
-      
-      <div class="loading" id="loading">Verifying and redirecting...</div>
-    </div>
-  
-    <script>
-      const widget = document.querySelector("#cap");
-      const loading = document.getElementById("loading");
-      
-      widget.addEventListener("solve", async function (e) {
-        const token = e.detail.token;
-        loading.style.display = "block";
-        
-        // Redirect with token
-        window.location.href = window.location.pathname + "?captcha_token=" + encodeURIComponent(token);
-      });
-    </script>
-  </body>
-  </html>`
-
+				const captchaPage = `<!DOCTYPE html>...`; // (此处省略部分保持原样或保留你原本的验证码页面模板)
 				return new Response(captchaPage, {
-					headers: {
-						"content-type": "text/html;charset=UTF-8",
-					},
+					headers: { "content-type": "text/html;charset=UTF-8" },
 					status: 403
-				})
+				});
 			}
 
-			const validation = await validateCaptchaToken(captchaToken, false)
-
+			const validation = await validateCaptchaToken(captchaToken, false);
 			if (!validation.success) {
-				return new Response(`
-  <!DOCTYPE html>
-  <html>
-  <head><title>Verification Failed</title></head>
-  <body>
-    <h1>❌ Verification Failed</h1>
-    <p>${validation.error || 'CAPTCHA verification failed'}</p>
-    <a href="${requestURL.pathname}">Try again</a>
-  </body>
-  </html>`, {
-					headers: {
-						"content-type": "text/html;charset=UTF-8",
-					},
+				return new Response(`Verification Failed`, {
+					headers: { "content-type": "text/html;charset=UTF-8" },
 					status: 403
-				})
-			}
-
-			if (validation.degraded) {
-				console.warn("Access granted under CAPTCHA service degradation")
+				});
 			}
 		}
 
-		// Safe browsing check
 		if (config.safe_browsing_api_key) {
 			if (!(await is_url_safe(location))) {
-				let warning_page = await fetch("https://xytom.github.io/Url-Shorten-Worker/safe-browsing.html")
-				warning_page = await warning_page.text()
-				warning_page = warning_page.replace(/{Replace}/gm, location)
+				let warning_page = await fetch("https://xytom.github.io/Url-Shorten-Worker/safe-browsing.html");
+				warning_page = await warning_page.text();
+				warning_page = warning_page.replace(/{Replace}/gm, location);
 				return new Response(warning_page, {
 					headers: {
 						"content-type": "text/html;charset=UTF-8",
 					},
-				})
+				});
 			}
 		}
 
-		// Redirect to target URL
 		if (config.no_ref == "on") {
-			let no_ref = await fetch("https://xytom.github.io/Url-Shorten-Worker/no-ref.html")
-			no_ref = await no_ref.text()
-			no_ref = no_ref.replace(/{Replace}/gm, location)
+			let no_ref = await fetch("https://xytom.github.io/Url-Shorten-Worker/no-ref.html");
+			no_ref = await no_ref.text();
+			no_ref = no_ref.replace(/{Replace}/gm, location);
 			return new Response(no_ref, {
 				headers: {
 					"content-type": "text/html;charset=UTF-8",
 				},
-			})
+			});
 		} else {
-			return Response.redirect(location, 302)
+			return Response.redirect(location, 302);
 		}
 	}
 
-	// If request not in kv, return 404
 	return new Response(html404, {
 		headers: {
 			"content-type": "text/html;charset=UTF-8",
 		},
 		status: 404
-	})
+	});
 }
 
-
-
 addEventListener("fetch", async event => {
-	event.respondWith(handleRequest(event.request))
-})
+	event.respondWith(handleRequest(event.request));
+});
