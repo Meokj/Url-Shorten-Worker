@@ -42,7 +42,21 @@ Variable name 填写 `LINKS`, KV namespace 选择你刚刚创建的命名空间
 
 Copy the `index.js` code from this project to Cloudflare Worker.
 
-复制本项目中的 `index.js` 的代码到 Cloudflare Worker
+#### 1.复制本项目中的 `index.js` 的代码到 Cloudflare Worker
+
+#### 2.如果需要调用API且需要自定义过期时间(单位秒)，复制本项目中的 `index_modify.js` 的代码到 Cloudflare Worker
+
+##### 2.1.当POST请求时，没传ttl参数，默认设置过期时间为1天,代码中已关闭人机验证
+
+##### 2.2.body的参数：`url`，`ttl`  
+
+```javascript
+    body:
+    {
+      "url": "https://github.com",
+      "ttl": 3600
+    }
+```
 
 ### 5. 配置验证码 (可选) / Configure CAPTCHA (Optional)
 
