@@ -119,12 +119,23 @@ function getKvPutOptions(requestCustomTtl) {
 async function save_url(URL, customTtl) {
 	let random_key = await randomString()
 	let is_exist = await LINKS.get(random_key)
-	console.log(is_exist)
+	
 	if (is_exist == null) {
-		// 将自定义的 ttl 传入 getKvPutOptions 中
-		return await LINKS.put(random_key, URL, getKvPutOptions(customTtl)), random_key
-	} else
-		return save_url(URL, customTtl) // 递归时也要透传
+		try {
+			const options = getKvPutOptions(customTtl); 
+			return await LINKS.put(random_key, URL, options), random_key;
+		} catch (err) {
+			return new Response(JSON.stringify({
+				status: 400,
+				error: err.message
+			}), {
+				status: 400,
+				headers: response_header 
+			});
+		}
+	} else {
+		return save_url(URL, customTtl)
+	}
 }
 
 async function is_url_exist(url_sha512) {
