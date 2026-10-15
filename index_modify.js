@@ -128,20 +128,11 @@ async function save_url(URL, customTtl) {
 	let is_exist = await LINKS.get(random_key)
 	
 	if (is_exist == null) {
-		try {
-			const options = getKvPutOptions(customTtl); 
-			return await LINKS.put(random_key, URL, options), random_key;
-		} catch (err) {
-			return new Response(JSON.stringify({
-				status: 400,
-				error: err.message
-			}), {
-				status: 400,
-				headers: response_header 
-			});
-		}
+		const options = getKvPutOptions(customTtl); 
+		await LINKS.put(random_key, URL, options);
+		return random_key;
 	} else {
-		return save_url(URL, customTtl)
+		return await save_url(URL, customTtl)
 	}
 }
 
@@ -328,12 +319,12 @@ async function handleRequest(request) {
 	console.log(request)
 
 	// Handle POST request - Create short link
-	if (request.method === "POST") {
+if (request.method === "POST") {
+	try {
 		let req = await request.json()
 		console.log(req["url"])
 
 		// 从解析好的 JSON 请求体中提取用户可能传入的自定义 ttl
-		// 如果没传这个参数，customTtl 的值就是 undefined，后台将自动执行“保底1天(86400秒)”的策略
 		let customTtl = req["ttl"];
 
 		// Validate URL format
@@ -346,6 +337,20 @@ async function handleRequest(request) {
 				status: 400
 			})
 		}
+
+		// 调用真正的 save_url 获取随机短链 key
+		let stat = await save_url(req["url"], customTtl)
+
+	} catch (err) {
+		return new Response(JSON.stringify({
+			status: 400,
+			error: err.message  
+		}), {
+			status: 400,
+			headers: response_header  
+		})
+	}
+}
 
 		// CAPTCHA validation for link creation
 		if (isCaptchaRequired('create')) {
@@ -438,7 +443,6 @@ async function handleRequest(request) {
 			headers: response_header,
 		})
 	}
-
 
 	// Handle GET request - Access short link
 	const requestURL = new URL(request.url)
